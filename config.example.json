@@ -1,0 +1,19 @@
+{
+  "replay_duration": 60,
+  "resolution": "same",
+  "fps": 60,
+  "bitrate": 12000,
+  "encoder": "auto",
+  "hotkey": { "modifiers": 0, "vk": 121, "display": "F10" },
+  "microphone_enabled": false,
+  "microphone_device": "",
+  "output_device": "",
+  "save_directory": "",
+  "start_with_windows": false,
+  "auto_start_replay": true,
+  "start_minimized": true,
+  "capture_cursor": true,
+  "monitor_index": 0,
+  "exclude_window_from_capture": true,
+  "language": "en"
+}

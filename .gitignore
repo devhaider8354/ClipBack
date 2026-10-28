@@ -1,0 +1,10 @@
+build/
+build-ninja/
+dist/
+out/
+.vs/
+*.user
+CMakeSettings.json
+*.zip
+*.log
+_*backup/

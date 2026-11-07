@@ -63,8 +63,10 @@ private:
     void ShowTrayMenu();
     void OnCommand(int id, int code, HWND control);
     void UpdateBitrateEditState();
+    void UpdateAudioModeControls();
     void UpdateCaptureExclusion();
     void OpenCreditLink();
+    void PlayClipSound();
     void RebuildControls();
     void Exit();
     void ScheduleMatchStart();
@@ -113,9 +115,9 @@ private:
     HWND btnToggle_ = nullptr, btnSave_ = nullptr, btnOpenFolder_ = nullptr, btnMatch_ = nullptr;
     HWND cmbLanguage_ = nullptr;
     HWND cmbDuration_ = nullptr, cmbResolution_ = nullptr, cmbFps_ = nullptr, cmbBitrate_ = nullptr, edtBitrate_ = nullptr;
-    HWND cmbEncoder_ = nullptr, cmbMonitor_ = nullptr, hotkeyCtl_ = nullptr, chkCursor_ = nullptr;
-    HWND chkMic_ = nullptr, cmbMic_ = nullptr, cmbOutput_ = nullptr, edtSaveDir_ = nullptr, btnBrowse_ = nullptr;
-    HWND chkStartup_ = nullptr, chkMinimized_ = nullptr, chkAutoStart_ = nullptr, btnApply_ = nullptr, btnDefaults_ = nullptr;
+    HWND cmbEncoder_ = nullptr, cmbMonitor_ = nullptr, hotkeyCtl_ = nullptr, chkCursor_ = nullptr, chkHideBorder_ = nullptr;
+    HWND chkMic_ = nullptr, cmbMic_ = nullptr, cmbOutput_ = nullptr, cmbAudioMode_ = nullptr, edtSaveDir_ = nullptr, btnBrowse_ = nullptr;
+    HWND chkStartup_ = nullptr, chkMinimized_ = nullptr, chkAutoStart_ = nullptr, chkClipSound_ = nullptr, btnApply_ = nullptr, btnDefaults_ = nullptr;
     HWND diagText_ = nullptr, btnDiagRefresh_ = nullptr, btnDiagCopy_ = nullptr, btnDiagLog_ = nullptr;
 };
 

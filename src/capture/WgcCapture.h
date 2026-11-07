@@ -20,7 +20,7 @@ public:
 
     static bool IsSupported();
 
-    bool Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, FrameCallback callback, std::wstring& error) override;
+    bool Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, bool hideCaptureBorder, FrameCallback callback, std::wstring& error) override;
     void Stop() override;
     const wchar_t* Name() const override { return L"Windows Graphics Capture"; }
     bool HasFailed(std::wstring& error) const override;

@@ -104,21 +104,33 @@ bool ReplayEngine::Start(const Settings& settings, std::wstring& error)
     ac.outputDeviceId = settings.outputDeviceId;
     ac.microphoneEnabled = settings.microphoneEnabled;
     ac.microphoneDeviceId = settings.microphoneDeviceId;
+    ac.mode = settings.audioMode;
     ac.aacBitrateKbps = 160;
     std::wstring audioError;
-    audioActive_ = audio_->Start(ac, sessionStart_, [this](EncodedPacket&& p) { OnAudioPacket(std::move(p)); }, audioError);
+    audioActive_ = audio_->Start(ac, sessionStart_, [this](AudioTrack track, EncodedPacket&& p) { OnAudioPacket(track, std::move(p)); }, audioError);
     if (!audioActive_) {
         LOG_ERROR(L"Audio capture unavailable: %s", audioError.c_str());
         audio_.reset();
         Emit({ EngineEventType::Error, L"Audio capture unavailable - recording video only. " + audioError, L"", false });
     }
 
-    // 6) Capture: WGC first, Desktop Duplication as fallback
+    // 6) Capture: Desktop Duplication has no Windows capture border. Prefer it when
+    // the user asks to hide the border; otherwise WGC remains the primary backend.
     FrameCallback cb = [this](const CapturedFrame& f) { OnFrame(f); };
     std::wstring wgcError;
-    if (WgcCapture::IsSupported()) {
+    if (settings.hideCaptureBorder) {
+        auto dup = std::make_unique<DuplicationCapture>();
+        std::wstring dupError;
+        if (dup->Start(*device_, mon.handle, settings.captureCursor, settings.hideCaptureBorder, cb, dupError)) {
+            capture_ = std::move(dup);
+            LOG_INFO(L"Using Desktop Duplication to capture without a yellow border");
+        } else {
+            LOG_WARN(L"Borderless Desktop Duplication unavailable (%s) - trying Windows Graphics Capture", dupError.c_str());
+        }
+    }
+    if (!capture_ && WgcCapture::IsSupported()) {
         auto wgc = std::make_unique<WgcCapture>();
-        if (wgc->Start(*device_, mon.handle, settings.captureCursor, cb, wgcError)) {
+        if (wgc->Start(*device_, mon.handle, settings.captureCursor, settings.hideCaptureBorder, cb, wgcError)) {
             capture_ = std::move(wgc);
         } else {
             LOG_WARN(L"WGC unavailable (%s) - trying Desktop Duplication", wgcError.c_str());
@@ -130,7 +142,7 @@ bool ReplayEngine::Start(const Settings& settings, std::wstring& error)
     if (!capture_) {
         auto dup = std::make_unique<DuplicationCapture>();
         std::wstring dupError;
-        if (dup->Start(*device_, mon.handle, settings.captureCursor, cb, dupError)) {
+        if (dup->Start(*device_, mon.handle, settings.captureCursor, settings.hideCaptureBorder, cb, dupError)) {
             capture_ = std::move(dup);
         } else {
             error = L"Screen capture failed. " + wgcError + L" / " + dupError;
@@ -219,13 +231,13 @@ void ReplayEngine::OnVideoPacket(EncodedPacket&& pkt)
     buffer_.PushVideo(std::move(pkt));
 }
 
-void ReplayEngine::OnAudioPacket(EncodedPacket&& pkt)
+void ReplayEngine::OnAudioPacket(AudioTrack track, EncodedPacket&& pkt)
 {
     {
         std::lock_guard<std::mutex> lock(matchMutex_);
-        if (match_) match_->PushAudio(pkt);
+        if (match_) match_->PushAudio(track, pkt);
     }
-    buffer_.PushAudio(std::move(pkt));
+    buffer_.PushAudio(track, std::move(pkt));
 }
 
 void ReplayEngine::WatchdogMain()
@@ -313,7 +325,11 @@ bool ReplayEngine::StartMatchRecording(std::wstring& error)
     }
     ComPtr<IMFMediaType> videoType = encoder_->OutputType();
     if (!videoType) { error = L"Nothing recorded yet - wait a second and try again"; return false; }
-    ComPtr<IMFMediaType> audioType = audio_ ? audio_->OutputType() : nullptr;
+    AudioMediaTypes audioTypes;
+    if (audio_) for (size_t i = 0; i < kAudioTrackCount; ++i) {
+        const AudioTrack track = static_cast<AudioTrack>(i);
+        if (audio_->HasTrack(track)) audioTypes.tracks[i] = audio_->OutputType(track);
+    }
 
     const std::wstring directory = settings_.EffectiveSaveDirectory();
     if (!paths::EnsureDirectory(directory)) { error = L"Cannot create folder: " + directory; return false; }
@@ -325,7 +341,7 @@ bool ReplayEngine::StartMatchRecording(std::wstring& error)
 
     auto writer = std::make_shared<Mp4StreamWriter>();
     const std::wstring path = paths::Join(directory, MakeMatchFileName());
-    if (!writer->Open(path, videoType.Get(), audioType.Get(), error)) {
+    if (!writer->Open(path, videoType.Get(), audioTypes, error)) {
         LOG_ERROR(L"Match recording could not start: %s", error.c_str());
         return false;
     }
@@ -382,7 +398,7 @@ bool ReplayEngine::SaveReplay(std::wstring& error)
         videoType = encoder_->OutputType();
         if (!videoType) { error = L"Nothing recorded yet - wait a second and try again"; return false; }
         if (!buffer_.Snapshot(snapshot)) { error = L"Nothing recorded yet - wait a second and try again"; return false; }
-        if (audio_) audioType = audio_->OutputType();
+        if (audio_) audioType = audio_->OutputType(audio_->HasTrack(AudioTrack::Mix) ? AudioTrack::Mix : AudioTrack::Game);
         directory = settings_.EffectiveSaveDirectory();
         saving_ = true;
     }

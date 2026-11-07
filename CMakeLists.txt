@@ -105,6 +105,7 @@ target_link_libraries(ClipBack PRIVATE
     ole32 oleaut32 uuid
     user32 gdi32 shell32 shlwapi comctl32 dwmapi uxtheme msimg32
     avrt propsys shcore advapi32
+    winmm
     strmiids          # CODECAPI_* GUIDs
 )
 

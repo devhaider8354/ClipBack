@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include <mmsystem.h>
 #include "ui/resource.h"
 #include "ui/Strings.h"
 #include "system/Paths.h"
@@ -273,6 +274,7 @@ void MainWindow::CreateSettingsPage()
     cmbLanguage_ = combo(IDC_CMB_LANGUAGE);
     ComboBox_AddString(cmbLanguage_, T(Str::LangEnglish));
     ComboBox_AddString(cmbLanguage_, T(Str::LangArabic));
+    ComboBox_AddString(cmbLanguage_, T(Str::LangPortugueseBrazil));
 
     label(T(Str::SetDuration));
     cmbDuration_ = combo(IDC_CMB_DURATION);
@@ -331,13 +333,35 @@ void MainWindow::CreateSettingsPage()
     cmbMic_ = combo(IDC_CMB_MIC);
     settingsControls_.push_back(chkMic_);
 
+    const wchar_t* audioModeLabel = CurrentLanguage() == Language::PortugueseBrazil ? L"Modo de áudio"
+        : (CurrentLanguage() == Language::Arabic ? L"وضع الصوت" : L"Audio mode");
+    label(audioModeLabel);
+    cmbAudioMode_ = combo(IDC_CMB_AUDIO_MODE);
+    if (CurrentLanguage() == Language::PortugueseBrazil) {
+        ComboBox_AddString(cmbAudioMode_, L"Mix (PC + microfone)");
+        ComboBox_AddString(cmbAudioMode_, L"Separado (PC e microfone)");
+        ComboBox_AddString(cmbAudioMode_, L"Três trilhas (mix, PC e microfone)");
+    } else if (CurrentLanguage() == Language::Arabic) {
+        ComboBox_AddString(cmbAudioMode_, L"مزيج (الكمبيوتر + الميكروفون)");
+        ComboBox_AddString(cmbAudioMode_, L"منفصل (الكمبيوتر والميكروفون)");
+        ComboBox_AddString(cmbAudioMode_, L"ثلاثة مسارات (المزيج والكمبيوتر والميكروفون)");
+    } else {
+        ComboBox_AddString(cmbAudioMode_, L"Mix (PC + microphone)");
+        ComboBox_AddString(cmbAudioMode_, L"Separate (PC and microphone)");
+        ComboBox_AddString(cmbAudioMode_, L"Three tracks (mix, PC and microphone)");
+    }
+
     chkCursor_ = MakeControl(L"BUTTON", T(Str::ChkCursor), WS_TABSTOP | BS_AUTOCHECKBOX, IDC_CHK_CURSOR);
+    chkHideBorder_ = MakeControl(L"BUTTON", T(Str::ChkHideCaptureBorder), WS_TABSTOP | BS_AUTOCHECKBOX, IDC_CHK_HIDE_BORDER);
     chkStartup_ = MakeControl(L"BUTTON", T(Str::ChkStartup), WS_TABSTOP | BS_AUTOCHECKBOX, IDC_CHK_STARTUP);
     chkMinimized_ = MakeControl(L"BUTTON", T(Str::ChkMinimized), WS_TABSTOP | BS_AUTOCHECKBOX, IDC_CHK_MINIMIZED);
     chkAutoStart_ = MakeControl(L"BUTTON", T(Str::ChkAutoStart), WS_TABSTOP | BS_AUTOCHECKBOX, IDC_CHK_AUTOSTART);
+    const wchar_t* clipSoundText = CurrentLanguage() == Language::PortugueseBrazil ? L"Tocar som ao salvar replay"
+        : (CurrentLanguage() == Language::Arabic ? L"تشغيل صوت عند حفظ الإعادة" : L"Play sound when saving replay");
+    chkClipSound_ = MakeControl(L"BUTTON", clipSoundText, WS_TABSTOP | BS_AUTOCHECKBOX, IDC_CHK_CLIP_SOUND);
     btnApply_ = MakeControl(L"BUTTON", T(Str::BtnApply), WS_TABSTOP | BS_DEFPUSHBUTTON, IDC_BTN_APPLY);
     btnDefaults_ = MakeControl(L"BUTTON", T(Str::BtnDefaults), WS_TABSTOP | BS_PUSHBUTTON, IDC_BTN_DEFAULTS);
-    settingsControls_.insert(settingsControls_.end(), { chkCursor_, chkStartup_, chkMinimized_, chkAutoStart_, btnApply_, btnDefaults_ });
+    settingsControls_.insert(settingsControls_.end(), { chkCursor_, chkHideBorder_, chkStartup_, chkMinimized_, chkAutoStart_, chkClipSound_, btnApply_, btnDefaults_ });
 }
 
 void MainWindow::CreateDiagnosticsPage()
@@ -419,12 +443,15 @@ void MainWindow::Layout()
         placeLabel(y); place(cmbOutput_, cx, cw); y += rowH;
         placeLabel(y); SetWindowPos(chkMic_, nullptr, cx, y + Scale(2), Scale(170), ctlH, SWP_NOZORDER);
         SetWindowPos(cmbMic_, nullptr, cx + Scale(180), y, cw - Scale(180), Scale(200), SWP_NOZORDER); y += rowH + Scale(6);
+        placeLabel(y); place(cmbAudioMode_, cx, cw); y += rowH + Scale(6);
 
         const int half = pw / 2;
         SetWindowPos(chkCursor_, nullptr, px, y, half, ctlH, SWP_NOZORDER);
-        SetWindowPos(chkStartup_, nullptr, px + half, y, half, ctlH, SWP_NOZORDER); y += Scale(30);
-        SetWindowPos(chkMinimized_, nullptr, px, y, half, ctlH, SWP_NOZORDER);
-        SetWindowPos(chkAutoStart_, nullptr, px + half, y, half, ctlH, SWP_NOZORDER); y += Scale(40);
+        SetWindowPos(chkHideBorder_, nullptr, px + half, y, half, ctlH, SWP_NOZORDER); y += Scale(30);
+        SetWindowPos(chkStartup_, nullptr, px, y, half, ctlH, SWP_NOZORDER);
+        SetWindowPos(chkMinimized_, nullptr, px + half, y, half, ctlH, SWP_NOZORDER); y += Scale(30);
+        SetWindowPos(chkAutoStart_, nullptr, px, y, half, ctlH, SWP_NOZORDER);
+        SetWindowPos(chkClipSound_, nullptr, px + half, y, half, ctlH, SWP_NOZORDER); y += Scale(40);
 
         SetWindowPos(btnApply_, nullptr, px, y, Scale(160), Scale(36), SWP_NOZORDER);
         SetWindowPos(btnDefaults_, nullptr, px + Scale(172), y, Scale(160), Scale(36), SWP_NOZORDER);
@@ -587,7 +614,10 @@ void MainWindow::LoadSettingsIntoControls()
 
     SendMessageW(hotkeyCtl_, HKM_SETHOTKEY, HotkeyManager::ToControlValue(s.hotkey), 0);
     Button_SetCheck(chkCursor_, s.captureCursor ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(chkHideBorder_, s.hideCaptureBorder ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(chkMic_, s.microphoneEnabled ? BST_CHECKED : BST_UNCHECKED);
+    UpdateAudioModeControls();
+    ComboBox_SetCurSel(cmbAudioMode_, s.microphoneEnabled ? static_cast<int>(s.audioMode) : 0);
 
     micDevices_ = sysInfo_.captureDevices;
     outputDevices_ = sysInfo_.renderDevices;
@@ -599,6 +629,7 @@ void MainWindow::LoadSettingsIntoControls()
     Button_SetCheck(chkStartup_, s.startWithWindows ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(chkMinimized_, s.startMinimized ? BST_CHECKED : BST_UNCHECKED);
     Button_SetCheck(chkAutoStart_, s.autoStartReplay ? BST_CHECKED : BST_UNCHECKED);
+    Button_SetCheck(chkClipSound_, s.clipSoundEnabled ? BST_CHECKED : BST_UNCHECKED);
     UpdateBitrateEditState();
 }
 
@@ -609,10 +640,31 @@ void MainWindow::UpdateBitrateEditState()
     EnableWindow(edtBitrate_, idx == 4);
 }
 
+void MainWindow::UpdateAudioModeControls()
+{
+    const bool micEnabled = Button_GetCheck(chkMic_) == BST_CHECKED;
+    ComboBox_ResetContent(cmbAudioMode_);
+    if (!micEnabled) {
+        ComboBox_AddString(cmbAudioMode_, CurrentLanguage() == Language::PortugueseBrazil ? L"Somente áudio do PC" : (CurrentLanguage() == Language::Arabic ? L"صوت الكمبيوتر فقط" : L"PC audio only"));
+        ComboBox_SetCurSel(cmbAudioMode_, 0);
+        return;
+    }
+    if (CurrentLanguage() == Language::PortugueseBrazil) {
+        ComboBox_AddString(cmbAudioMode_, L"Mix (PC + microfone)"); ComboBox_AddString(cmbAudioMode_, L"Separado (PC e microfone)"); ComboBox_AddString(cmbAudioMode_, L"Três trilhas (mix, PC e microfone)"); ComboBox_AddString(cmbAudioMode_, L"Somente áudio do PC");
+    } else if (CurrentLanguage() == Language::Arabic) {
+        ComboBox_AddString(cmbAudioMode_, L"مزيج (الكمبيوتر + الميكروفون)"); ComboBox_AddString(cmbAudioMode_, L"منفصل (الكمبيوتر والميكروفون)"); ComboBox_AddString(cmbAudioMode_, L"ثلاثة مسارات (المزيج والكمبيوتر والميكروفون)"); ComboBox_AddString(cmbAudioMode_, L"صوت الكمبيوتر فقط");
+    } else {
+        ComboBox_AddString(cmbAudioMode_, L"Mix (PC + microphone)"); ComboBox_AddString(cmbAudioMode_, L"Separate (PC and microphone)"); ComboBox_AddString(cmbAudioMode_, L"Three tracks (mix, PC and microphone)"); ComboBox_AddString(cmbAudioMode_, L"PC audio only");
+    }
+    ComboBox_SetCurSel(cmbAudioMode_, 0);  // microphone was just enabled: default to the mixed track
+}
+
 bool MainWindow::ReadSettingsFromControls(Settings& out, std::wstring& error)
 {
     out = settings_;
-    out.language = ComboBox_GetCurSel(cmbLanguage_) == 1 ? Language::Arabic : Language::English;
+    const int languageIndex = ComboBox_GetCurSel(cmbLanguage_);
+    out.language = languageIndex == static_cast<int>(Language::Arabic) ? Language::Arabic
+        : (languageIndex == static_cast<int>(Language::PortugueseBrazil) ? Language::PortugueseBrazil : Language::English);
     const int durationIdx = ComboBox_GetCurSel(cmbDuration_);
     out.replayDurationSec = durationIdx == 0 ? 30 : (durationIdx == 2 ? 120 : 60);
     out.resolution = static_cast<ResolutionMode>(std::max(0, ComboBox_GetCurSel(cmbResolution_)));
@@ -636,7 +688,9 @@ bool MainWindow::ReadSettingsFromControls(Settings& out, std::wstring& error)
     out.hotkey = HotkeyManager::FromControlValue(hk);
 
     out.captureCursor = Button_GetCheck(chkCursor_) == BST_CHECKED;
+    out.hideCaptureBorder = Button_GetCheck(chkHideBorder_) == BST_CHECKED;
     out.microphoneEnabled = Button_GetCheck(chkMic_) == BST_CHECKED;
+    out.audioMode = out.microphoneEnabled ? static_cast<AudioMode>(std::max(0, ComboBox_GetCurSel(cmbAudioMode_))) : AudioMode::PcOnly;
     const int micIdx = ComboBox_GetCurSel(cmbMic_);
     out.microphoneDeviceId = (micIdx > 0 && static_cast<size_t>(micIdx - 1) < micDevices_.size()) ? micDevices_[static_cast<size_t>(micIdx - 1)].id : L"";
     const int outIdx = ComboBox_GetCurSel(cmbOutput_);
@@ -654,6 +708,7 @@ bool MainWindow::ReadSettingsFromControls(Settings& out, std::wstring& error)
     out.startWithWindows = Button_GetCheck(chkStartup_) == BST_CHECKED;
     out.startMinimized = Button_GetCheck(chkMinimized_) == BST_CHECKED;
     out.autoStartReplay = Button_GetCheck(chkAutoStart_) == BST_CHECKED;
+    out.clipSoundEnabled = Button_GetCheck(chkClipSound_) == BST_CHECKED;
     return true;
 }
 
@@ -671,7 +726,7 @@ void MainWindow::ApplySettings()
     const bool pipelineChanged =
         updated.replayDurationSec != settings_.replayDurationSec || updated.resolution != settings_.resolution || updated.fps != settings_.fps ||
         updated.bitrateKbps != settings_.bitrateKbps || updated.encoder != settings_.encoder || updated.monitorIndex != settings_.monitorIndex ||
-        updated.captureCursor != settings_.captureCursor || updated.microphoneEnabled != settings_.microphoneEnabled ||
+        updated.captureCursor != settings_.captureCursor || updated.hideCaptureBorder != settings_.hideCaptureBorder || updated.microphoneEnabled != settings_.microphoneEnabled || updated.audioMode != settings_.audioMode ||
         updated.microphoneDeviceId != settings_.microphoneDeviceId || updated.outputDeviceId != settings_.outputDeviceId ||
         updated.saveDirectory != settings_.saveDirectory;
 
@@ -802,8 +857,16 @@ void MainWindow::SaveReplay()
     if (!engine_.SaveReplay(error)) {
         tray_.Notify(T(Str::MsgNotSaved), error, NIIF_WARNING);
         LOG_WARN(L"Save request rejected: %s", error.c_str());
+    } else if (settings_.clipSoundEnabled) {
+        PlayClipSound();
     }
     RefreshStatus();
+}
+
+void MainWindow::PlayClipSound()
+{
+    // Asynchronous resource playback has no disk I/O or worker thread in the recording path.
+    PlaySoundW(MAKEINTRESOURCEW(IDR_CLIP_SOUND), instance_, SND_ASYNC | SND_NODEFAULT | SND_RESOURCE);
 }
 
 void MainWindow::ToggleMatchRecording()
@@ -1041,7 +1104,7 @@ void MainWindow::OnCommand(int id, int code, HWND)
     }
     case IDC_BTN_BROWSE: BrowseForFolder(); break;
     case IDC_CMB_BITRATE: if (code == CBN_SELCHANGE) UpdateBitrateEditState(); break;
-    case IDC_CHK_MIC: EnableWindow(cmbMic_, Button_GetCheck(chkMic_) == BST_CHECKED); break;
+    case IDC_CHK_MIC: EnableWindow(cmbMic_, Button_GetCheck(chkMic_) == BST_CHECKED); UpdateAudioModeControls(); break;
     case IDC_BTN_DIAG_REFRESH:
         sysInfo_ = CollectSystemInfo();
         RefreshDiagnostics();

@@ -56,7 +56,7 @@ bool DuplicationCapture::CreateDuplication(std::wstring& error)
     return true;
 }
 
-bool DuplicationCapture::Start(D3DDevice& device, HMONITOR monitor, bool /*captureCursor*/, FrameCallback callback, std::wstring& error)
+bool DuplicationCapture::Start(D3DDevice& device, HMONITOR monitor, bool /*captureCursor*/, bool /*hideCaptureBorder*/, FrameCallback callback, std::wstring& error)
 {
     Stop();
     device_ = &device;

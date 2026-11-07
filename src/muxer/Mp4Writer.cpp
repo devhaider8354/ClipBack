@@ -77,31 +77,31 @@ Mp4WriteResult Mp4Writer::Write(const std::wstring& path, const ReplaySnapshot& 
     hr = writer->SetInputMediaType(videoIndex, vOut.Get(), nullptr);
     if (FAILED(hr)) { result.error = L"SetInputMediaType(video) failed: " + logging::HResultToString(hr); return result; }
 
-    DWORD audioIndex = 0;
-    bool hasAudio = false;
-    if (audioType && !snapshot.audio.empty()) {
-        ComPtr<IMFMediaType> aOut = CloneType(audioType);
-        if (aOut && SUCCEEDED(writer->AddStream(aOut.Get(), &audioIndex)) && SUCCEEDED(writer->SetInputMediaType(audioIndex, aOut.Get(), nullptr))) {
-            hasAudio = true;
-        } else {
-            LOG_WARN(L"Audio stream could not be added to the MP4 - saving video only");
+    std::array<DWORD, kAudioTrackCount> audioIndex{};
+    std::array<bool, kAudioTrackCount> hasAudio{};
+    if (audioType) {
+        for (size_t track = 0; track < kAudioTrackCount; ++track) {
+            if (snapshot.audio[track].empty()) continue;
+            ComPtr<IMFMediaType> aOut = CloneType(audioType);
+            if (aOut && SUCCEEDED(writer->AddStream(aOut.Get(), &audioIndex[track])) && SUCCEEDED(writer->SetInputMediaType(audioIndex[track], aOut.Get(), nullptr))) hasAudio[track] = true;
+            else LOG_WARN(L"Audio track %zu could not be added to the MP4", track);
         }
     }
 
     hr = writer->BeginWriting();
     if (FAILED(hr)) { result.error = L"BeginWriting failed: " + logging::HResultToString(hr); return result; }
 
+    struct WriteItem { const EncodedPacket* packet; size_t track; };
+    std::vector<WriteItem> items;
+    items.reserve(snapshot.video.size() + snapshot.audio[0].size() + snapshot.audio[1].size() + snapshot.audio[2].size());
+    for (const auto& p : snapshot.video) items.push_back({ &p, kAudioTrackCount });
+    for (size_t track = 0; track < kAudioTrackCount; ++track) if (hasAudio[track]) for (const auto& p : snapshot.audio[track]) items.push_back({ &p, track });
+    std::stable_sort(items.begin(), items.end(), [](const WriteItem& a, const WriteItem& b) { return a.packet->pts < b.packet->pts; });
     const int64_t t0 = snapshot.startPts;
-    size_t vi = 0, ai = 0;
-    const size_t vn = snapshot.video.size();
-    const size_t an = hasAudio ? snapshot.audio.size() : 0;
-
-    // Interleave by timestamp so the sink writer never has to buffer one stream for long.
-    while (vi < vn || ai < an) {
-        const bool takeAudio = ai < an && (vi >= vn || snapshot.audio[ai].pts <= snapshot.video[vi].pts);
-        const EncodedPacket& pkt = takeAudio ? snapshot.audio[ai] : snapshot.video[vi];
-        const DWORD index = takeAudio ? audioIndex : videoIndex;
-        if (takeAudio) ++ai; else ++vi;
+    for (const WriteItem& item : items) {
+        const bool takeAudio = item.track != kAudioTrackCount;
+        const EncodedPacket& pkt = *item.packet;
+        const DWORD index = takeAudio ? audioIndex[item.track] : videoIndex;
 
         int64_t pts = pkt.pts - t0;
         if (pts < 0) {
@@ -136,7 +136,7 @@ Mp4WriteResult Mp4Writer::Write(const std::wstring& path, const ReplaySnapshot& 
 
 Mp4StreamWriter::~Mp4StreamWriter() { Close(); }
 
-bool Mp4StreamWriter::Open(const std::wstring& path, IMFMediaType* videoType, IMFMediaType* audioType, std::wstring& error)
+bool Mp4StreamWriter::Open(const std::wstring& path, IMFMediaType* videoType, const AudioMediaTypes& audioTypes, std::wstring& error)
 {
     if (thread_.joinable()) { error = L"Recording is already running"; return false; }
     if (!videoType) { error = L"Nothing recorded yet - wait a second and try again"; return false; }
@@ -157,7 +157,7 @@ bool Mp4StreamWriter::Open(const std::wstring& path, IMFMediaType* videoType, IM
         openDone_ = false;
         openError_.clear();
     }
-    thread_ = std::thread(&Mp4StreamWriter::WorkerMain, this, ComPtr<IMFMediaType>(videoType), ComPtr<IMFMediaType>(audioType));
+    thread_ = std::thread(&Mp4StreamWriter::WorkerMain, this, ComPtr<IMFMediaType>(videoType), audioTypes);
 
     std::unique_lock<std::mutex> lock(openMutex_);
     openCv_.wait(lock, [&] { return openDone_; });
@@ -176,19 +176,19 @@ bool Mp4StreamWriter::Open(const std::wstring& path, IMFMediaType* videoType, IM
     return true;
 }
 
-void Mp4StreamWriter::Push(const EncodedPacket& pkt, bool audio)
+void Mp4StreamWriter::Push(const EncodedPacket& pkt, bool audio, AudioTrack track)
 {
     if (!pkt.data || pkt.data->empty()) return;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!accepting_) return;
-        queue_.push_back({ pkt, audio });   // shares the packet bytes, no copy
+        queue_.push_back({ pkt, audio, track });   // shares the packet bytes, no copy
     }
     cv_.notify_one();
 }
 
 void Mp4StreamWriter::PushVideo(const EncodedPacket& pkt) { Push(pkt, false); }
-void Mp4StreamWriter::PushAudio(const EncodedPacket& pkt) { Push(pkt, true); }
+void Mp4StreamWriter::PushAudio(AudioTrack track, const EncodedPacket& pkt) { Push(pkt, true, track); }
 
 Mp4WriteResult Mp4StreamWriter::Close()
 {
@@ -202,7 +202,7 @@ Mp4WriteResult Mp4StreamWriter::Close()
     return result_;
 }
 
-void Mp4StreamWriter::WorkerMain(ComPtr<IMFMediaType> videoType, ComPtr<IMFMediaType> audioType)
+void Mp4StreamWriter::WorkerMain(ComPtr<IMFMediaType> videoType, AudioMediaTypes audioTypes)
 {
     ComInitializer com;
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
@@ -215,8 +215,9 @@ void Mp4StreamWriter::WorkerMain(ComPtr<IMFMediaType> videoType, ComPtr<IMFMedia
     };
 
     ComPtr<IMFSinkWriter> writer;
-    DWORD videoIndex = 0, audioIndex = 0;
-    bool hasAudio = false;
+    DWORD videoIndex = 0;
+    std::array<DWORD, kAudioTrackCount> audioIndex{};
+    std::array<bool, kAudioTrackCount> hasAudio{};
     {
         ComPtr<IMFAttributes> attrs;
         MFCreateAttributes(&attrs, 4);
@@ -232,13 +233,10 @@ void Mp4StreamWriter::WorkerMain(ComPtr<IMFMediaType> videoType, ComPtr<IMFMedia
         hr = writer->AddStream(vOut.Get(), &videoIndex);
         if (SUCCEEDED(hr)) hr = writer->SetInputMediaType(videoIndex, vOut.Get(), nullptr);
         if (FAILED(hr)) { signalOpen(L"Video stream setup failed: " + logging::HResultToString(hr)); return; }
-        if (audioType) {
-            ComPtr<IMFMediaType> aOut = CloneType(audioType.Get());
-            if (aOut && SUCCEEDED(writer->AddStream(aOut.Get(), &audioIndex)) && SUCCEEDED(writer->SetInputMediaType(audioIndex, aOut.Get(), nullptr))) {
-                hasAudio = true;
-            } else {
-                LOG_WARN(L"Match recording: audio stream could not be added - recording video only");
-            }
+        for (size_t track = 0; track < kAudioTrackCount; ++track) if (audioTypes.tracks[track]) {
+            ComPtr<IMFMediaType> aOut = CloneType(audioTypes.tracks[track].Get());
+            if (aOut && SUCCEEDED(writer->AddStream(aOut.Get(), &audioIndex[track])) && SUCCEEDED(writer->SetInputMediaType(audioIndex[track], aOut.Get(), nullptr))) hasAudio[track] = true;
+            else LOG_WARN(L"Match recording: audio track %zu could not be added", track);
         }
         hr = writer->BeginWriting();
         if (FAILED(hr)) { signalOpen(L"BeginWriting failed: " + logging::HResultToString(hr)); return; }
@@ -246,18 +244,22 @@ void Mp4StreamWriter::WorkerMain(ComPtr<IMFMediaType> videoType, ComPtr<IMFMedia
     signalOpen(L"");
     LOG_INFO(L"Match recording started: %s", path_.c_str());
 
-    int64_t base = -1, lastVideoPts = -1, lastAudioPts = -1;
-    int64_t lastAudioWall = Now100ns(), lastTick = 0;
-    std::vector<EncodedPacket> heldAudio;   // audio that arrived before the first keyframe
+    int64_t base = -1, lastVideoPts = -1, lastTick = 0;
+    std::array<int64_t, kAudioTrackCount> lastAudioPts{};
+    std::array<int64_t, kAudioTrackCount> lastAudioWall{};
+    std::array<std::vector<EncodedPacket>, kAudioTrackCount> heldAudio;
+    lastAudioPts.fill(-1);
+    lastAudioWall.fill(Now100ns());
     std::wstring error;
 
-    auto write = [&](const EncodedPacket& pkt, bool audio) {
+    auto write = [&](const EncodedPacket& pkt, bool audio, AudioTrack track = AudioTrack::Mix) {
         if (failed_) return;
         const int64_t pts = pkt.pts - base;
-        if (audio) { if (pts < 0 || pts <= lastAudioPts) return; }
+        const size_t trackIndex = static_cast<size_t>(track);
+        if (audio) { if (pts < 0 || pts <= lastAudioPts[trackIndex]) return; }
         else if (pts <= lastVideoPts) return;
         ComPtr<IMFSample> sample = MakeSample(pkt, pts);
-        HRESULT hr = sample ? writer->WriteSample(audio ? audioIndex : videoIndex, sample.Get()) : E_OUTOFMEMORY;
+        HRESULT hr = sample ? writer->WriteSample(audio ? audioIndex[trackIndex] : videoIndex, sample.Get()) : E_OUTOFMEMORY;
         if (FAILED(hr)) {
             error = std::wstring(audio ? L"Writing audio failed: " : L"Writing video failed: ") + logging::HResultToString(hr);
             LOG_ERROR(L"Match recording: %s", error.c_str());
@@ -265,7 +267,7 @@ void Mp4StreamWriter::WorkerMain(ComPtr<IMFMediaType> videoType, ComPtr<IMFMedia
             return;
         }
         writtenBytes_ += pkt.size();
-        if (audio) { lastAudioPts = pts; lastAudioWall = Now100ns(); }
+        if (audio) { lastAudioPts[trackIndex] = pts; lastAudioWall[trackIndex] = Now100ns(); }
         else { lastVideoPts = pts; writtenTicks_ = pts + pkt.duration; }
     };
 
@@ -280,24 +282,27 @@ void Mp4StreamWriter::WorkerMain(ComPtr<IMFMediaType> videoType, ComPtr<IMFMedia
         }
         for (const Item& it : batch) {
             if (it.audio) {
-                if (!hasAudio) continue;
-                if (base < 0) { if (heldAudio.size() < 4000) heldAudio.push_back(it.pkt); continue; }
-                write(it.pkt, true);
+                const size_t track = static_cast<size_t>(it.track);
+                if (!hasAudio[track]) continue;
+                if (base < 0) { if (heldAudio[track].size() < 4000) heldAudio[track].push_back(it.pkt); continue; }
+                write(it.pkt, true, it.track);
             } else {
                 if (base < 0) {
                     if (!it.pkt.keyframe) continue;   // the file must start on a keyframe
                     base = it.pkt.pts;
-                    for (const EncodedPacket& a : heldAudio) write(a, true);
-                    heldAudio.clear();
+                    for (size_t track = 0; track < kAudioTrackCount; ++track) {
+                        for (const EncodedPacket& a : heldAudio[track]) write(a, true, static_cast<AudioTrack>(track));
+                        heldAudio[track].clear();
+                    }
                 }
                 write(it.pkt, false);
             }
         }
         // Audio stopped (device lost): tell the sink not to wait for it, so video keeps flowing to disk.
         const int64_t now = Now100ns();
-        if (hasAudio && base >= 0 && !failed_ && now - lastAudioWall > 2 * kTicksPerSecond && now - lastTick > kTicksPerSecond && lastVideoPts >= 0) {
+        if (base >= 0 && !failed_ && now - lastTick > kTicksPerSecond && lastVideoPts >= 0) {
             lastTick = now;
-            writer->SendStreamTick(audioIndex, lastVideoPts);
+            for (size_t track = 0; track < kAudioTrackCount; ++track) if (hasAudio[track] && now - lastAudioWall[track] > 2 * kTicksPerSecond) writer->SendStreamTick(audioIndex[track], lastVideoPts);
         }
         if (stopping) break;
     }

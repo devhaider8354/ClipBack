@@ -4,6 +4,7 @@
 
 IDI_APPICON  ICON "app.ico"
 IDI_TRAYICON ICON "app.ico"
+IDR_CLIP_SOUND WAVE "sound.wav"
 
 // Common Controls v6 + per-monitor DPI awareness
 1 RT_MANIFEST "ClipBack.manifest"

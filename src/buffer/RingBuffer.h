@@ -11,6 +11,7 @@
 #include <mutex>
 #include <memory>
 #include <vector>
+#include <array>
 
 namespace clipback {
 
@@ -22,9 +23,12 @@ struct EncodedPacket {
     size_t size() const { return data ? data->size() : 0; }
 };
 
+enum class AudioTrack : uint8_t { Mix = 0, Game = 1, Microphone = 2, Count = 3 };
+constexpr size_t kAudioTrackCount = static_cast<size_t>(AudioTrack::Count);
+
 struct ReplaySnapshot {
     std::vector<EncodedPacket> video;   // starts on a keyframe
-    std::vector<EncodedPacket> audio;
+    std::array<std::vector<EncodedPacket>, kAudioTrackCount> audio;
     int64_t startPts = 0;               // pts of first video packet
     int64_t endPts = 0;                 // pts + duration of last video packet
     int64_t DurationTicks() const { return endPts - startPts; }
@@ -43,7 +47,7 @@ public:
 
     void SetRetention(int64_t retainTicks);
     void PushVideo(EncodedPacket packet);
-    void PushAudio(EncodedPacket packet);
+    void PushAudio(AudioTrack track, EncodedPacket packet);
     void Clear();
 
     // Copies packet handles (not bytes) for the last `retain` window. Returns false if there is no keyframe yet.
@@ -56,7 +60,7 @@ private:
     mutable std::mutex mutex_;
     int64_t retainTicks_;
     std::deque<EncodedPacket> video_;
-    std::deque<EncodedPacket> audio_;
+    std::array<std::deque<EncodedPacket>, kAudioTrackCount> audio_;
     size_t bytes_ = 0;
 };
 

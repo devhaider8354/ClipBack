@@ -26,7 +26,7 @@ bool WgcCapture::IsSupported()
     }
 }
 
-bool WgcCapture::Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, FrameCallback callback, std::wstring& error)
+bool WgcCapture::Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, bool hideCaptureBorder, FrameCallback callback, std::wstring& error)
 {
     Stop();
     {
@@ -63,8 +63,10 @@ bool WgcCapture::Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, 
             try { session_.IsCursorCaptureEnabled(captureCursor); } catch (const winrt::hresult_error& e) { LOG_WARN(L"IsCursorCaptureEnabled not applied: %s", e.message().c_str()); }
         }
         if (ApiInformation::IsPropertyPresent(L"Windows.Graphics.Capture.GraphicsCaptureSession", L"IsBorderRequired")) {
-            // Removes the yellow capture border on Windows 11. May require consent on some builds - ignore failures.
-            try { session_.IsBorderRequired(false); } catch (const winrt::hresult_error& e) { LOG_DEBUG(L"IsBorderRequired(false) not applied: %s", e.message().c_str()); }
+            // An unpackaged Win32 app cannot obtain the MSIX-only borderless capability.
+            // ReplayEngine therefore selects Desktop Duplication for borderless capture.
+            if (hideCaptureBorder) LOG_WARN(L"WGC fallback cannot remove the yellow border in an unpackaged app");
+            try { session_.IsBorderRequired(true); } catch (const winrt::hresult_error& e) { LOG_DEBUG(L"IsBorderRequired(true) not applied: %s", e.message().c_str()); }
         }
 
         frameArrivedToken_ = framePool_.FrameArrived({ this, &WgcCapture::OnFrameArrived });
@@ -72,7 +74,7 @@ bool WgcCapture::Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, 
 
         running_ = true;
         session_.StartCapture();
-        LOG_INFO(L"WGC capture started (%dx%d, cursor=%d)", lastSize_.Width, lastSize_.Height, captureCursor ? 1 : 0);
+        LOG_INFO(L"WGC capture started (%dx%d, cursor=%d, hide border=%d)", lastSize_.Width, lastSize_.Height, captureCursor ? 1 : 0, hideCaptureBorder ? 1 : 0);
         return true;
     } catch (const winrt::hresult_error& e) {
         error = L"Windows Graphics Capture failed: " + std::wstring(e.message().c_str()) + L" (" + logging::HResultToString(e.code()) + L")";

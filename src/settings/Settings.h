@@ -8,6 +8,7 @@ namespace clipback {
 
 enum class ResolutionMode { SameAsGame = 0, R1080p = 1, R720p = 2 };
 enum class EncoderPreference { Auto = 0, Nvenc = 1, Amf = 2, Qsv = 3, Cpu = 4 };
+enum class AudioMode { Mixed = 0, Separate = 1, Three = 2, PcOnly = 3 };
 
 struct Hotkey {
     UINT modifiers = 0;      // MOD_ALT / MOD_CONTROL / MOD_SHIFT / MOD_WIN
@@ -26,6 +27,7 @@ struct Settings {
     EncoderPreference encoder = EncoderPreference::Auto;
     Hotkey hotkey;
     bool microphoneEnabled = false;
+    AudioMode audioMode = AudioMode::Mixed;
     std::wstring microphoneDeviceId;                     // empty = default capture device
     std::wstring outputDeviceId;                         // empty = default render device
     std::wstring saveDirectory;                          // empty = Videos\ClipBack
@@ -33,6 +35,8 @@ struct Settings {
     bool autoStartReplay = true;                         // begin buffering when the app launches
     bool startMinimized = true;                          // launch straight into the tray
     bool captureCursor = true;
+    bool clipSoundEnabled = true;
+    bool hideCaptureBorder = true;                       // prefer Desktop Duplication, which has no Windows capture border
     int monitorIndex = 0;                                // which display to capture (0 = primary)
     bool excludeWindowFromCapture = true;                // hide this window from the recording while replay runs
     Language language = DetectSystemLanguage();          // UI language (English / Arabic)

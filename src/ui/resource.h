@@ -46,6 +46,10 @@
 #define IDC_CHK_AUTOSTART      3217
 #define IDC_BTN_APPLY          3218
 #define IDC_BTN_DEFAULTS       3219
+#define IDC_CHK_HIDE_BORDER    3220
+#define IDC_CMB_AUDIO_MODE     3221
+#define IDC_CHK_CLIP_SOUND     3222
+#define IDR_CLIP_SOUND         103
 #define IDC_SETTINGS_LABEL_FIRST 3300   // 3300..3340 static labels
 
 // Diagnostics page

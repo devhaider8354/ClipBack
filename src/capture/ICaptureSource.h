@@ -19,7 +19,7 @@ using FrameCallback = std::function<void(const CapturedFrame&)>;
 class ICaptureSource {
 public:
     virtual ~ICaptureSource() = default;
-    virtual bool Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, FrameCallback callback, std::wstring& error) = 0;
+    virtual bool Start(D3DDevice& device, HMONITOR monitor, bool captureCursor, bool hideCaptureBorder, FrameCallback callback, std::wstring& error) = 0;
     virtual void Stop() = 0;
     virtual const wchar_t* Name() const = 0;
     // Set when the source hit an unrecoverable error after Start (e.g. display mode change with no recovery).

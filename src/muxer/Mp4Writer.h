@@ -21,6 +21,10 @@ struct Mp4WriteResult {
     uint64_t bytes = 0;
 };
 
+struct AudioMediaTypes {
+    std::array<ComPtr<IMFMediaType>, kAudioTrackCount> tracks;
+};
+
 class Mp4Writer {
 public:
     // videoType must carry MF_MT_MPEG_SEQUENCE_HEADER (SPS/PPS). audioType may be null (video-only file).
@@ -37,9 +41,9 @@ public:
     Mp4StreamWriter(const Mp4StreamWriter&) = delete;
     Mp4StreamWriter& operator=(const Mp4StreamWriter&) = delete;
 
-    bool Open(const std::wstring& path, IMFMediaType* videoType, IMFMediaType* audioType, std::wstring& error);
+    bool Open(const std::wstring& path, IMFMediaType* videoType, const AudioMediaTypes& audioTypes, std::wstring& error);
     void PushVideo(const EncodedPacket& pkt);   // any thread, cheap
-    void PushAudio(const EncodedPacket& pkt);   // any thread, cheap
+    void PushAudio(AudioTrack track, const EncodedPacket& pkt);   // any thread, cheap
     Mp4WriteResult Close();                      // blocks until the file is finalized
 
     bool HasFailed() const { return failed_; }
@@ -48,9 +52,9 @@ public:
     const std::wstring& Path() const { return path_; }
 
 private:
-    struct Item { EncodedPacket pkt; bool audio; };
-    void WorkerMain(ComPtr<IMFMediaType> videoType, ComPtr<IMFMediaType> audioType);
-    void Push(const EncodedPacket& pkt, bool audio);
+    struct Item { EncodedPacket pkt; bool audio; AudioTrack track = AudioTrack::Mix; };
+    void WorkerMain(ComPtr<IMFMediaType> videoType, AudioMediaTypes audioTypes);
+    void Push(const EncodedPacket& pkt, bool audio, AudioTrack track = AudioTrack::Mix);
 
     std::wstring path_;
     std::thread thread_;

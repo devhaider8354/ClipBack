@@ -5,7 +5,7 @@
 
 namespace clipback {
 
-enum class Language { English = 0, Arabic = 1 };
+enum class Language { English = 0, Arabic = 1, PortugueseBrazil = 2 };
 
 enum class Str {
     AppTitle, Tagline, CreditLink,
@@ -33,6 +33,7 @@ enum class Str {
     // Match (continuous) recording
     LblMatch, ValMatchOff, ValMatchOn, BtnStartMatch, BtnStopMatch, TrayMatchStart, TrayMatchStop,
     MsgMatchStartedTitle, MsgMatchStartedBody, MsgMatchSavedTitle, MsgMatchFailedTitle,
+    ChkHideCaptureBorder, LangPortugueseBrazil,
     Count
 };
 
@@ -40,7 +41,7 @@ void SetLanguage(Language lang);
 Language CurrentLanguage();
 bool IsRtl();
 const wchar_t* T(Str id);
-Language LanguageFromString(const std::string& s);   // "ar" / "en" / "" (= system)
+Language LanguageFromString(const std::string& s);   // "ar" / "en" / "pt-BR" / "" (= system)
 std::string LanguageToString(Language lang);
 Language DetectSystemLanguage();
 

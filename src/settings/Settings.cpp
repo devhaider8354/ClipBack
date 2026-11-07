@@ -122,6 +122,24 @@ static std::string EncoderKey(EncoderPreference e)
     }
 }
 
+static AudioMode AudioModeFromKey(const std::string& s)
+{
+    if (s == "pc_only") return AudioMode::PcOnly;
+    if (s == "separate") return AudioMode::Separate;
+    if (s == "three") return AudioMode::Three;
+    return AudioMode::Mixed;
+}
+
+static const char* AudioModeKey(AudioMode mode)
+{
+    switch (mode) {
+    case AudioMode::PcOnly: return "pc_only";
+    case AudioMode::Separate: return "separate";
+    case AudioMode::Three: return "three";
+    default: return "mixed";
+    }
+}
+
 static int ClampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 bool LoadSettings(const std::wstring& path, Settings& out)
@@ -154,6 +172,7 @@ bool LoadSettings(const std::wstring& path, Settings& out)
         out.hotkey.vk = k ? static_cast<UINT>(ClampInt(k->asInt(VK_F10), 1, 254)) : VK_F10;
     }
     out.microphoneEnabled = getBool("microphone_enabled", false);
+    if (const json::Value* v = root.find("audio_mode"); v && v->isString()) out.audioMode = AudioModeFromKey(v->asString());
     out.microphoneDeviceId = getStr("microphone_device", L"");
     out.outputDeviceId = getStr("output_device", L"");
     out.saveDirectory = getStr("save_directory", L"");
@@ -161,6 +180,8 @@ bool LoadSettings(const std::wstring& path, Settings& out)
     out.autoStartReplay = getBool("auto_start_replay", true);
     out.startMinimized = getBool("start_minimized", true);
     out.captureCursor = getBool("capture_cursor", true);
+    out.clipSoundEnabled = getBool("clip_sound_enabled", true);
+    out.hideCaptureBorder = getBool("hide_capture_border", true);
     out.monitorIndex = ClampInt(getInt("monitor_index", 0), 0, 15);
     out.excludeWindowFromCapture = getBool("exclude_window_from_capture", true);
     if (const json::Value* v = root.find("language"); v && v->isString()) out.language = LanguageFromString(v->asString());
@@ -181,6 +202,7 @@ bool SaveSettings(const std::wstring& path, const Settings& s, std::wstring& err
     hk.set("display", str::WideToUtf8(s.hotkey.ToString()));
     root.set("hotkey", hk);
     root.set("microphone_enabled", s.microphoneEnabled);
+    root.set("audio_mode", AudioModeKey(s.audioMode));
     root.set("microphone_device", str::WideToUtf8(s.microphoneDeviceId));
     root.set("output_device", str::WideToUtf8(s.outputDeviceId));
     root.set("save_directory", str::WideToUtf8(s.saveDirectory));
@@ -188,6 +210,8 @@ bool SaveSettings(const std::wstring& path, const Settings& s, std::wstring& err
     root.set("auto_start_replay", s.autoStartReplay);
     root.set("start_minimized", s.startMinimized);
     root.set("capture_cursor", s.captureCursor);
+    root.set("clip_sound_enabled", s.clipSoundEnabled);
+    root.set("hide_capture_border", s.hideCaptureBorder);
     root.set("monitor_index", s.monitorIndex);
     root.set("exclude_window_from_capture", s.excludeWindowFromCapture);
     root.set("language", LanguageToString(s.language));

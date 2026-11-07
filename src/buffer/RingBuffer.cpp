@@ -21,18 +21,19 @@ void RingBuffer::PushVideo(EncodedPacket packet)
     TrimLocked();
 }
 
-void RingBuffer::PushAudio(EncodedPacket packet)
+void RingBuffer::PushAudio(AudioTrack track, EncodedPacket packet)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    auto& packets = audio_[static_cast<size_t>(track)];
     bytes_ += packet.size();
-    audio_.push_back(std::move(packet));
+    packets.push_back(std::move(packet));
     // Audio is trimmed against the video window in TrimLocked; if video has not started yet keep
     // at most the retention window of audio so the buffer cannot grow unbounded.
     if (video_.empty()) {
-        const int64_t newest = audio_.back().pts;
-        while (!audio_.empty() && newest - audio_.front().pts > retainTicks_ + kTicksPerSecond) {
-            bytes_ -= audio_.front().size();
-            audio_.pop_front();
+        const int64_t newest = packets.back().pts;
+        while (!packets.empty() && newest - packets.front().pts > retainTicks_ + kTicksPerSecond) {
+            bytes_ -= packets.front().size();
+            packets.pop_front();
         }
     }
 }
@@ -41,7 +42,7 @@ void RingBuffer::Clear()
 {
     std::lock_guard<std::mutex> lock(mutex_);
     video_.clear();
-    audio_.clear();
+    for (auto& packets : audio_) packets.clear();
     bytes_ = 0;
 }
 
@@ -66,9 +67,11 @@ void RingBuffer::TrimLocked()
     }
 
     const int64_t start = video_.front().pts;
-    while (!audio_.empty() && audio_.front().pts + audio_.front().duration < start) {
-        bytes_ -= audio_.front().size();
-        audio_.pop_front();
+    for (auto& packets : audio_) {
+        while (!packets.empty() && packets.front().pts + packets.front().duration < start) {
+            bytes_ -= packets.front().size();
+            packets.pop_front();
+        }
     }
 }
 
@@ -93,9 +96,11 @@ bool RingBuffer::Snapshot(ReplaySnapshot& out) const
     out.video.assign(video_.begin() + static_cast<std::ptrdiff_t>(startIndex), video_.end());
     out.startPts = out.video.front().pts;
     out.endPts = newest;
-    for (const auto& a : audio_) {
-        if (a.pts + a.duration <= out.startPts) continue;
-        out.audio.push_back(a);
+    for (size_t track = 0; track < kAudioTrackCount; ++track) {
+        for (const auto& a : audio_[track]) {
+            if (a.pts + a.duration <= out.startPts) continue;
+            out.audio[track].push_back(a);
+        }
     }
     return true;
 }
@@ -106,7 +111,7 @@ RingBufferStats RingBuffer::Stats() const
     RingBufferStats s;
     s.bytes = bytes_;
     s.videoPackets = video_.size();
-    s.audioPackets = audio_.size();
+    for (const auto& packets : audio_) s.audioPackets += packets.size();
     if (!video_.empty()) {
         s.bufferedSeconds = static_cast<double>(video_.back().pts + video_.back().duration - video_.front().pts) / static_cast<double>(kTicksPerSecond);
     }

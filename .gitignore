@@ -1,5 +1,6 @@
 build/
 build-ninja/
+build-ci/
 dist/
 out/
 .vs/
@@ -7,4 +8,5 @@ out/
 CMakeSettings.json
 *.zip
 *.log
+desktop.ini
 _*backup/

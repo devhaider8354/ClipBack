@@ -6,6 +6,7 @@
   "encoder": "auto",
   "hotkey": { "modifiers": 0, "vk": 121, "display": "F10" },
   "microphone_enabled": false,
+  "audio_mode": "mixed",
   "microphone_device": "",
   "output_device": "",
   "save_directory": "",
@@ -13,6 +14,8 @@
   "auto_start_replay": true,
   "start_minimized": true,
   "capture_cursor": true,
+  "clip_sound_enabled": true,
+  "hide_capture_border": true,
   "monitor_index": 0,
   "exclude_window_from_capture": true,
   "language": "en"

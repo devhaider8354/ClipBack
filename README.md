@@ -2,7 +2,7 @@
 
 [![Build](https://github.com/devhaider8354/ClipBack/actions/workflows/build.yml/badge.svg)](https://github.com/devhaider8354/ClipBack/actions/workflows/build.yml)
 
-**English** | [العربية](README.ar.md)
+**English** | [Português (Brasil)](README.pt-BR.md) | [العربية](README.ar.md)
 
 Instant-replay recorder for Windows games. It keeps the last 30/60/120 seconds of
 gameplay in memory and writes them to an MP4 when you press a hotkey (default **F10**) – the same idea
@@ -188,6 +188,7 @@ WASAPI mic ──────┴──▶ AudioMixer (48 kHz stereo, QPC clock) 
   "encoder": "auto",             // "auto" | "nvenc" | "amf" | "qsv" | "cpu"
   "hotkey": { "modifiers": 0, "vk": 121, "display": "F10" },
   "microphone_enabled": false,
+  "audio_mode": "mixed",              // "mixed" | "separate" | "three"
   "microphone_device": "",       // WASAPI endpoint id, "" = default
   "output_device": "",           // game audio endpoint id, "" = default
   "save_directory": "",          // "" = %USERPROFILE%\Videos\ClipBack
@@ -195,6 +196,8 @@ WASAPI mic ──────┴──▶ AudioMixer (48 kHz stereo, QPC clock) 
   "auto_start_replay": true,
   "start_minimized": true,
   "capture_cursor": true,
+  "clip_sound_enabled": true,
+  "hide_capture_border": true,          // use capture mode without the yellow Windows border
   "monitor_index": 0,
   "exclude_window_from_capture": true,  // keep the ClipBack window out of the video while recording
   "language": "ar"                       // "ar" or "en" (defaults to the Windows display language)

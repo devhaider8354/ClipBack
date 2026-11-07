@@ -89,7 +89,7 @@ public:
 private:
     void OnFrame(const CapturedFrame& frame);
     void OnVideoPacket(EncodedPacket&& pkt);
-    void OnAudioPacket(EncodedPacket&& pkt);
+    void OnAudioPacket(AudioTrack track, EncodedPacket&& pkt);
     void WatchdogMain();
     void SaveThreadMain(ReplaySnapshot snapshot, ComPtr<IMFMediaType> videoType, ComPtr<IMFMediaType> audioType, std::wstring directory);
     void Emit(const EngineEvent& e);
